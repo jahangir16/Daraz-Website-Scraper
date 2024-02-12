@@ -30,32 +30,15 @@ class DarazSpider(scrapy.Spider):
         self.cur = self.conn.cursor()
 
         try:
-            while True:
+            
                 self.cur.execute('SELECT url, category FROM product_urls WHERE processed = FALSE LIMIT 1')
                 product_url, category = self.cur.fetchone()
-                if not product_url:
-                    break
-
-                if self.last_url == product_url:
-                    self.logger.warning(f"Stuck in a loop with URL: {product_url}")
-                    continue
 
                 self.logger.info(f"Processing URL: {product_url}")
-                #time.sleep(3)
-                #self.driver.get(product_url)
-                #time.sleep(3)
                 yield scrapy.Request(url=product_url, callback=self.parse, meta={'category': category, 'product_url': product_url})
-
-            # Update 'processed' flag in the database
-            #self.cur.execute("UPDATE product_urls SET processed = TRUE WHERE url = %s", (product_url,))
-            #self.conn.commit()
 
         except Exception as e:
             self.logger.error(f"Error processing URL: {e}")
-        finally:
-            self.cur.close()
-            self.conn.close()
-            self.driver.quit()
 
 
     def parse(self, response):
@@ -129,8 +112,32 @@ class DarazSpider(scrapy.Spider):
            self.logger.info(f"Marked URL as processed: {product_url}")
            self.last_url = product_url
            self.logger.info(f"Updated last_url to: {self.last_url}")
+
+           self.logger.info("Calling fetch_next_url")
+
+           # Then call a new method to fetch the next URL
+           yield from self.fetch_next_url()
+
+
         except Exception as e:
             self.logger.error(f"Error parsing response: {e}")
+
+        
+
+    def fetch_next_url(self):
+        self.logger.info("Inside fetch_next_url")
+        # Fetch the next URL from the database
+        self.cur.execute('SELECT url, category FROM product_urls WHERE processed = FALSE LIMIT 1')
+        row = self.cur.fetchone()
+
+        if row is not None:
+            product_url, category = row
+            # Send a new request for the next URL
+            yield scrapy.Request(url=product_url, callback=self.parse, meta={'category': category, 'product_url': product_url})
+        else:
+            self.logger.info("No more URLs to process")
+            self.cur.close()
+            self.conn.close()
 
     def closed(self, reason):
         print("Spider closed with reason:", reason)

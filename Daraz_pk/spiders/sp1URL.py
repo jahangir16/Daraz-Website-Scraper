@@ -12,7 +12,7 @@ class DarazURLSpider(scrapy.Spider):
         self.cur.execute('CREATE TABLE IF NOT EXISTS product_urls (id serial PRIMARY KEY, url TEXT, category TEXT)')
     # ...
         categories = ['smartphones']  # replace with your actual categories
-        urls = [("https://www.daraz.pk/%s/?page=%d" % (category, i), category) for category in categories for i in range(2,3)]
+        urls = [("https://www.daraz.pk/%s/?page=%d" % (category, i), category) for category in categories for i in range(4,6)]
         for url, category in urls:
             yield scrapy.Request(url, meta={'category': category})
 
