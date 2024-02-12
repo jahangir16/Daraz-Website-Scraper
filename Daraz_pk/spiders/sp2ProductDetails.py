@@ -3,6 +3,7 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from scrapy.selector import Selector
 import time
+import pprint
 import psycopg2
 from Daraz_pk.items import DarazPkItem
 from scrapy.http import TextResponse
@@ -20,44 +21,51 @@ class DarazSpider(scrapy.Spider):
         self.conn = None
         self.cur = None
         self.last_url = None
+        pprint.pprint("SartingSpider********************************")
 
     def start_requests(self):
         self.driver = webdriver.Chrome()
         self.driver.maximize_window()
-
         self.conn = psycopg2.connect(database="DarazProducts1", user="postgres", password="123456", host="localhost")
         self.cur = self.conn.cursor()
 
-        while True:
-            try:
+        try:
+            while True:
                 self.cur.execute('SELECT url, category FROM product_urls WHERE processed = FALSE LIMIT 1')
-                product_urls = self.cur.fetchall()
-
-                if not product_urls:
+                product_url, category = self.cur.fetchone()
+                if not product_url:
                     break
 
-                for product_url, category in product_urls:
-                    if self.last_url == product_url:  # Check if the URL is the same as the last one
-                        self.logger.warning(f"Stuck in a loop with URL: {product_url}")
-                        continue
+                if self.last_url == product_url:
+                    self.logger.warning(f"Stuck in a loop with URL: {product_url}")
+                    continue
 
-                    self.logger.info(f"Processing URL: {product_url}")
-                    self.driver.get(product_url)
-                    time.sleep(3)
-                    yield scrapy.Request(url=product_url, callback=self.parse, meta={'category': category, 'product_url': product_url})
+                self.logger.info(f"Processing URL: {product_url}")
+                #time.sleep(3)
+                #self.driver.get(product_url)
+                #time.sleep(3)
+                yield scrapy.Request(url=product_url, callback=self.parse, meta={'category': category, 'product_url': product_url})
 
-            except Exception as e:
-                self.logger.error(f"Error processing URL: {e}")
-                continue
+            # Update 'processed' flag in the database
+            #self.cur.execute("UPDATE product_urls SET processed = TRUE WHERE url = %s", (product_url,))
+            #self.conn.commit()
 
-        self.cur.close()
-        self.conn.close()
-        self.driver.quit()
+        except Exception as e:
+            self.logger.error(f"Error processing URL: {e}")
+        finally:
+            self.cur.close()
+            self.conn.close()
+            self.driver.quit()
+
 
     def parse(self, response):
         try:
+           pprint.pprint("parse********************************")
+
            product_url = response.meta['product_url']
            category = response.meta['category']
+           self.driver.get(product_url)
+           time.sleep(3)
         
            body = self.driver.page_source
            scrapy_response = TextResponse(url=response.url, body=body, encoding='utf-8')

@@ -12,7 +12,7 @@ class DarazURLSpider(scrapy.Spider):
         self.cur.execute('CREATE TABLE IF NOT EXISTS product_urls (id serial PRIMARY KEY, url TEXT, category TEXT)')
     # ...
         categories = ['smartphones']  # replace with your actual categories
-        urls = [("https://www.daraz.pk/%s/?page=%d" % (category, i), category) for category in categories for i in range(1,2)]
+        urls = [("https://www.daraz.pk/%s/?page=%d" % (category, i), category) for category in categories for i in range(2,3)]
         for url, category in urls:
             yield scrapy.Request(url, meta={'category': category})
 
@@ -24,12 +24,12 @@ class DarazURLSpider(scrapy.Spider):
 
     def parse(self, response):
         category = response.meta['category']
-        
+    
         try:
-            # Extract all script tags within the head section
+        # Extract all script tags within the head section
             script_tags = response.xpath('//head/script[4]').getall() # Extract all script tags data
 
-            # Find the script containing the product links
+        # Find the script containing the product links
             target_script = None
             for script in script_tags:
                 if 'window.pageData' in script:  # Identify the script containing product links
@@ -37,21 +37,30 @@ class DarazURLSpider(scrapy.Spider):
                     break
 
             if target_script:
-                # Extract the JSON object from the script
+            # Extract the JSON object from the script
                 start_index = target_script.find('{')
                 end_index = target_script.rfind('}') + 1
                 json_data = target_script[start_index:end_index]
 
-                # Load the JSON data
+            # Load the JSON data
                 data = json.loads(json_data)
-                # Extract product links
+            # Extract product links
                 product_urls = []
                 if 'mods' in data and 'listItems' in data['mods']:
                     for item in data['mods']['listItems']:
                         if isinstance(item, dict) and 'productUrl' in item:
                             product_url = "https:" + item['productUrl']
-                            self.cur.execute('INSERT INTO product_urls (url, category) VALUES (%s, %s)', (product_url, category))
-
-         
+                        
+                        # Check if the URL already exists in the database
+                            self.cur.execute('SELECT COUNT(*) FROM product_urls WHERE url = %s', (product_url,))
+                            count = self.cur.fetchone()[0]
+                        
+                            if count == 0:
+                            # If the URL does not exist, insert it into the database
+                                self.cur.execute('INSERT INTO product_urls (url, category) VALUES (%s, %s)', (product_url, category))
+     
         except Exception as e:
             self.log(f"Error in parse method: {e}")
+
+         
+      
